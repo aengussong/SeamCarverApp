@@ -16,7 +16,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.aengussong.seamcarver.model.Picture
 import com.aengussong.seamcarver.ui.screen.MainScreen
-import com.aengussong.seamcarver.ui.screen.SaveScreen
 import com.aengussong.seamcarver.ui.screen.SeamCarverScreen
 import com.aengussong.seamcarver.ui.theme.SeamCarverTheme
 import com.aengussong.seamcarver.utils.adjustAngle
@@ -40,9 +39,6 @@ class MainActivity : ComponentActivity() {
                     var selectedFile: File? by remember {
                         mutableStateOf(null)
                     }
-                    var resultPicture: Picture? by remember {
-                        mutableStateOf(null)
-                    }
 
                     // navigation here is shit, but it's okay until there is 3 screens and not a lot of states
                     // navigation in compose is shit anyway, but this shit is simpler to setup
@@ -57,11 +53,13 @@ class MainActivity : ComponentActivity() {
                         )
                     } else if (selectedFile != null) {
                         val initPic = Picture(selectedFile!!).adjustAngle().adjustSize()
-                        SeamCarverScreen(initPic) { finalPicture ->
-                            resultPicture = finalPicture
-                        }
-                    } else if (resultPicture != null) {
-                        SaveScreen(resultPicture!!)
+                        SeamCarverScreen(initPic, onSaveFile = { pictureToSave ->
+
+                        }, onShareFile = { pictureToShare ->
+
+                        }, onBackPressed = {
+                            selectedFile = null
+                        })
                     }
                 }
             }
@@ -69,6 +67,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun getImageFile(): File? {
+        // reset deferred
+        imageUriDeferred = CompletableDeferred()
         mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         val uri = imageUriDeferred.await()
 
