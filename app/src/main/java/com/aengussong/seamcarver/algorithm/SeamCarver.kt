@@ -71,6 +71,7 @@ class SeamCarver(picture: Picture) {
     }
 
     fun removeHorizontalSeam(seam: IntArray) {
+        if (height == 1) return
         val newPicture = Picture(width, height - 1)
 
         for (x in 0 until width) {
@@ -92,6 +93,7 @@ class SeamCarver(picture: Picture) {
     }
 
     fun removeVerticalSeam(seam: IntArray) {
+        if (width == 1) return
         val newPicture = Picture(width - 1, height)
         for (y in 0 until height) {
             val pixels = picture.getHorizontalRgbLine(0, y)
