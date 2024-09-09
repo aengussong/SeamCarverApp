@@ -8,11 +8,8 @@
 using namespace std;
 
 extern "C" JNIEXPORT jintArray JNICALL
-Java_com_aengussong_seamcarver_algorithm_SeamCarver_findVerticalSeam(JNIEnv* env, jobject obj, jobjectArray energyArray) {
+Java_com_aengussong_seamcarver_algorithm_SeamCarver_findVerticalSeam(JNIEnv* env, jobject obj, jobjectArray energyArray, jint width, jint height) {
     // copying an array takes 300ms
-    int width = env->GetArrayLength(energyArray);
-    int height = env->GetArrayLength((jdoubleArray)env->GetObjectArrayElement(energyArray, 0));
-
     // Convert energyArray (Java double[][]) to a C++ 2D vector
     vector<vector<double>> energy(width, vector<double>(height));
     for (int i = 0; i < width; ++i) {

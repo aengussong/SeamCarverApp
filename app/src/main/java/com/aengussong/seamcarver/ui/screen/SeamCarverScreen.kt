@@ -45,14 +45,18 @@ import com.aengussong.seamcarver.algorithm.SeamCarver
 import com.aengussong.seamcarver.model.Picture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
-fun SeamCarverScreen(initialPicture: Picture, onSaveFile: (Picture) -> Unit, onShareFile: (Picture) -> Unit, onBackPressed: () -> Unit) {
+fun SeamCarverScreen(
+    initialPicture: Picture,
+    onSaveFile: (Picture) -> Unit,
+    onShareFile: (Picture) -> Unit,
+    onBackPressed: () -> Unit
+) {
     BackHandler {
         onBackPressed()
     }
@@ -172,11 +176,10 @@ fun InteractionButton(
     }
 
     LaunchedEffect(buttonPressed) {
-        while (buttonPressed) {
-            scope.launch {
+        withContext(Dispatchers.IO) {
+            while (buttonPressed) {
                 removeSeam(seamCarver, pictureProcessor, orientation)
             }
-            delay(50)
         }
     }
 }
@@ -198,24 +201,21 @@ fun RoundButton(icon: ImageVector, contentDescription: String, onClick: () -> Un
     }
 }
 
-suspend fun removeSeam(
+fun removeSeam(
     seamCarver: SeamCarver,
     pictureProcessor: PictureProcessor,
     orientation: RemovedSeamOrientation
 ) {
-    coroutineScope {
-        async(Dispatchers.IO) {
-            if (orientation == HORIZONTAL) {
-                val seam = seamCarver.findHorizontalSeam()
-                seamCarver.removeHorizontalSeam(seam)
-            } else {
-                val seam = seamCarver.findVerticalSeam()
-                seamCarver.removeVerticalSeam(seam)
-            }
-
-            pictureProcessor.sendPicture(seamCarver.getPicture())
-        }
+    if (orientation == HORIZONTAL) {
+        val seam = seamCarver.findHorizontalSeam()
+        seamCarver.removeHorizontalSeam(seam)
+    } else {
+        val seam = seamCarver.findVerticalSeam()
+        seamCarver.removeVerticalSeam(seam)
     }
+
+    pictureProcessor.sendPicture(seamCarver.getPicture())
+
 }
 
 class PictureProcessor(initialPicture: Picture) {

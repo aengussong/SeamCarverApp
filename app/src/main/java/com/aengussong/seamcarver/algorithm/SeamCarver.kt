@@ -17,7 +17,7 @@ class SeamCarver(picture: Picture) {
     private val height: Int
         get() = picture.height
 
-    private external fun findVerticalSeam(energy: Array<DoubleArray>): IntArray
+    private external fun findVerticalSeam(energy: Array<DoubleArray>, width: Int, height: Int): IntArray
 
     init {
         System.loadLibrary("seam_finder")
@@ -67,7 +67,7 @@ class SeamCarver(picture: Picture) {
     }
 
     fun findVerticalSeam(): IntArray {
-        return findVerticalSeam(energy)
+        return findVerticalSeam(energy, width, height)
     }
 
     fun removeHorizontalSeam(seam: IntArray) {
