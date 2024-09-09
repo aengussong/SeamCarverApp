@@ -27,7 +27,6 @@ import com.aengussong.seamcarver.model.Picture
 import com.aengussong.seamcarver.ui.screen.MainScreen
 import com.aengussong.seamcarver.ui.screen.SeamCarverScreen
 import com.aengussong.seamcarver.ui.theme.SeamCarverTheme
-import com.aengussong.seamcarver.utils.adjustAngle
 import com.aengussong.seamcarver.utils.adjustSize
 import com.aengussong.seamcarver.utils.getFileFromUri
 import kotlinx.coroutines.CompletableDeferred
@@ -75,7 +74,7 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     } else if (selectedFile != null) {
-                        val initPic = Picture(selectedFile!!).adjustAngle().adjustSize()
+                        val initPic = Picture(selectedFile!!).adjustSize()
                         SeamCarverScreen(initPic, onSaveFile = { picture ->
                             pictureToSave = picture.image
                             checkAndRequestWritePermissions(pictureToSave!!)
