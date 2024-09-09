@@ -1,141 +1,121 @@
 package com.aengussong.seamcarver.algorithm
 
-import androidx.compose.runtime.currentRecomposeScope
+import com.aengussong.seamcarver.algorithm.pixelProvider.CachedSlice
+import com.aengussong.seamcarver.algorithm.pixelProvider.DefaultPixelProvider
+import com.aengussong.seamcarver.algorithm.pixelProvider.PixelProvider
 import com.aengussong.seamcarver.model.Picture
 import java.util.Arrays
-
-// todo improve array traversal - in 2D array first go trough each rows (for y in height { for x in width })
-
-const val MOVE_BITMAP_COLORS_IN_MEMORY = true
+import kotlin.math.abs
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 class SeamCarver(picture: Picture) {
     private var energy: Array<DoubleArray> = arrayOf()
-    private var picture: Picture? = null
+    private lateinit var picture: Picture
+    private val width: Int
+        get() = picture.width
+    private val height: Int
+        get() = picture.height
 
-    private lateinit var precalculatedImage: Array<Array<Int>>
-    private var m: Int = 0
-    private var n: Int = 0
+    private external fun findVerticalSeam(energy: Array<DoubleArray>): IntArray
 
     init {
-        if (MOVE_BITMAP_COLORS_IN_MEMORY) {
-            this.picture = picture
-            this.m = this.picture!!.height()
-            this.n = this.picture!!.width()
-            moveColorsToMemory(picture)
-            this.picture = null
-            computeEnergy()
-        }
-        //initPicture(picture)
+        System.loadLibrary("seam_finder")
+        initPicture(picture)
     }
 
-    fun picture(): Picture {
+    fun getPicture(): Picture {
         return Picture(picture)
     }
-/*
-    fun getColumns(): Int {
-        return picture.width()
-    }
 
-    fun getRows(): Int {
-        return picture.height()
-    }*/
-
-   /* fun energy(x: Int, y: Int): Double {
+    fun energy(x: Int, y: Int): Double {
         checkPixel(x, y)
         return energy[x][y]
-    }*/
+    }
 
     fun findHorizontalSeam(): IntArray {
-        //val path = Array(m) { IntArray(n) }
-        val values = Array(m) { DoubleArray(n) }
-        for (i in 0 until m) {
+        val path = Array(width) { IntArray(height) }
+        val values = Array(width) { DoubleArray(height) }
+        for (i in 0 until width) {
             Arrays.fill(values[i], Double.MAX_VALUE)
         }
-        for (i in 0 until m) {
-            values[i][0] = energy[i][0]
+        for (i in 0 until height) {
+            values[0][i] = energy[0][i]
         }
-
-        for (j in 1 until n) {
-            for (i in 1 until m - 1) {
-                values[i][j] = energy[i][j] + minOf(values[i - 1][j - 1], values[i][j - 1], values[i + 1][j - 1])
-            }
-        }
-/*
-        for (x in 0 until getColumns() - 1) {
-            for (y in 1 until getRows() - 1) {
+        for (x in 0 until width - 1) {
+            for (y in 1 until height - 1) {
                 relax(path, values, x, y, x + 1, y - 1, HORIZONTAL)
                 relax(path, values, x, y, x + 1, y, HORIZONTAL)
                 relax(path, values, x, y, x + 1, y + 1, HORIZONTAL)
             }
         }
-        */
-
         var shortest = Double.MAX_VALUE
-        var shorthestIndex: Int = 0
-
-        for (i in 0 until m) {
-            if (values[i][n - 1] < shortest) {
-                shortest = values[i][n - 1]
-                shorthestIndex = i
+        var shortestIndex = 0
+        for (y in 0 until height) {
+            if (values[width - 1][y] < shortest) {
+                shortest = values[width - 1][y]
+                shortestIndex = y
             }
         }
-
-        var currentIndex = shorthestIndex
-        val horizontalSeam = IntArray(n)
-
-        for (j in n - 1 downTo 1) {
-            horizontalSeam[j] = currentIndex
-            val previousMin = minOf(values[currentIndex - 1][j - 1], values[currentIndex][j - 1], values[currentIndex + 1][j - 1])
-            if (previousMin == values[currentIndex - 1][j - 1]) {
-                currentIndex -= 1
-            } else if (previousMin == values[currentIndex + 1][j - 1]) {
-                currentIndex += 1
-            }
-        }
-
-        horizontalSeam[0] = currentIndex
-/*
-
-        for (x in getColumns() - 1 downTo 0) {
+        var nextIndex = shortestIndex
+        val horizontalSeam = IntArray(width)
+        for (x in width - 1 downTo 0) {
             horizontalSeam[x] = nextIndex
             nextIndex = path[x][nextIndex]
-        }*/
+        }
         return horizontalSeam
     }
-/*
+
     fun findVerticalSeam(): IntArray {
-        val path = Array(getColumns()) { IntArray(getRows()) }
-        val values = Array(getColumns()) { DoubleArray(getRows()) }
-        for (i in 0 until getColumns()) {
-            Arrays.fill(values[i], Double.MAX_VALUE)
-        }
-        for (i in 0 until getColumns()) {
-            values[i][0] = energy[i][0]
-        }
-        for (y in 0 until getRows() - 1) {
-            for (x in 1 until getColumns() - 1) {
-                relax(path, values, x, y, x - 1, y + 1, VERTICAl)
-                relax(path, values, x, y, x, y + 1, VERTICAl)
-                relax(path, values, x, y, x + 1, y + 1, VERTICAl)
-            }
-        }
-        var shorthest = Double.MAX_VALUE
-        var shorthestIndex = 0
-        for (x in 0 until getColumns()) {
-            if (values[x][getRows() - 1] < shorthest) {
-                shorthest = values[x][getRows() - 1]
-                shorthestIndex = x
-            }
-        }
-        var nextIndex = shorthestIndex
-        val verticalSeam = IntArray(getRows())
-        for (y in getRows() - 1 downTo 0) {
-            verticalSeam[y] = nextIndex
-            nextIndex = path[nextIndex][y]
-        }
-        return verticalSeam
+        return findVerticalSeam(energy)
     }
-*/
+
+    fun removeHorizontalSeam(seam: IntArray) {
+        val newPicture = Picture(width, height - 1)
+
+        for (x in 0 until width) {
+            val pixels = picture.getVerticalRgbLine(x, 0)
+            val newPixels = IntArray(height)
+            for (y in 0 until height) {
+                if (y == seam[x]) continue
+                if (y > seam[x]) {
+                    newPixels[y - 1] = pixels[y]
+                } else {
+                    newPixels[y] = pixels[y]
+                }
+            }
+            newPicture.setVerticalRgbLine(newPixels, x, 0)
+        }
+
+        picture = newPicture
+        recalculateEnergy(seam, HORIZONTAL)
+    }
+
+    fun removeVerticalSeam(seam: IntArray) {
+        val newPicture = Picture(width - 1, height)
+        for (y in 0 until height) {
+            val pixels = picture.getHorizontalRgbLine(0, y)
+            val newPixels = IntArray(width)
+            for (x in 0 until width) {
+                if (x == seam[y]) continue
+                if (x > seam[y]) {
+                    newPixels[x - 1] = pixels[x]
+                } else {
+                    newPixels[x] = pixels[x]
+                }
+            }
+            newPicture.setHorizontalRgbLine(newPixels, 0, y)
+        }
+
+        picture = newPicture
+        recalculateEnergy(seam, VERTICAL)
+    }
+
+    private fun initPicture(picture: Picture) {
+        this.picture = picture
+        computeInitialEnergy()
+    }
+
     private fun relax(
         path: Array<IntArray>,
         values: Array<DoubleArray>,
@@ -147,98 +127,53 @@ class SeamCarver(picture: Picture) {
     ) {
         if (values[tx][ty] < values[x][y] + energy[tx][ty]) return
         values[tx][ty] = values[x][y] + energy[tx][ty]
-        if (orientation == VERTICAl) {
+        if (orientation == VERTICAL) {
             path[tx][ty] = x
         } else {
             path[tx][ty] = y
         }
     }
 
-    fun generateNewPicture() {
-        val newPicture = Picture(n, m)
-
-        for (i in 0 until m) {
-            for (j in 0 until n) {
-                newPicture.setRGB(j, i, getRGB(i, j))
-            }
-        }
-
-        this.picture = newPicture
-    }
-
-    fun removeHorizontalSeam(seam: IntArray) {
-        //checkSeam(seam, HORIZONTAL)
-        //val newPicture = Picture(n, m - 1)
-        for (i in 0 until m) {
-            for (j in 0 until n) {
-                if (i == seam[j]) continue
-                if (i > seam[j]) {
-                    precalculatedImage[i][j] = precalculatedImage[i-1][j]
-                    //newPicture.setRGB(j, i - 1, getRGB(i, j))
-                } /*else {
-                    //newPicture.setRGB(j, i, getRGB(i, j))
-                }*/
-            }
-        }
-        m -= 1
-
-        //initPicture(newPicture)
-    }
-/*
-    fun removeVerticalSeam(seam: IntArray) {
-        checkSeam(seam, VERTICAl)
-        val newPicture = Picture(getColumns() - 1, getRows())
-        for (y in 0 until getRows()) {
-            for (x in 0 until getColumns()) {
-                if (x == seam[y]) continue
-                if (x > seam[y]) {
-                    newPicture.setRGB(x - 1, y, getRGB(x, y))
-                } else {
-                    newPicture.setRGB(x, y, getRGB(x, y))
-                }
-            }
-        }
-        initPicture(newPicture)
-    }
-*/
-    private fun moveColorsToMemory(picture: Picture) {
-        precalculatedImage = Array(m) {Array(n) {0}}
-
-        for (i in 0 until m) {
-            for (j in 0 until n) {
-                precalculatedImage[i][j] = picture.getRGB(j, i)
-            }
+    /**
+     * When recalculating energy after seam removal we only need to recalculated energy only for the position of removed
+     * seam, and pixel's around it, which might be affected (pixels on top or on left of the removed seam coordinates,
+     * based on whether horizontal or vertical seam was removed). This allows us not to spend as much time for the energy
+     * calculation as it is needed for initial pass.
+     *
+     * @param removedSeam - single array of x or y coordinates of the seam, that was just removed, depending on
+     * [orientation]. x-s for Horizontal and y-s for Vertical.
+     * @param orientation - orientation of the seam that was just removed
+     * */
+    private fun recalculateEnergy(removedSeam: IntArray, orientation: Int) {
+        val pixelProvider = DefaultPixelProvider(picture)
+        var traversedSide = 0
+        for (i in removedSeam) {
+            // coordinates of the removed seam
+            val (x, y) = if (orientation == HORIZONTAL) traversedSide to i else i to traversedSide
+            // nearest coordinates that also has to be recalculated (top or left row of the removed seam)
+            val (nx, ny) = if (orientation == HORIZONTAL) x to (y - 1).coerceAtLeast(0) else (x - 1).coerceAtLeast(0) to y
+            energy[x][y] = pixelEnergy(x, y, pixelProvider)
+            energy[nx][ny] = pixelEnergy(nx, ny, pixelProvider)
+            traversedSide++
         }
     }
 
-    // todo move precalculation logic inside the Picture class
-    private fun getRGB(i: Int, j: Int): Int {
-        return if (MOVE_BITMAP_COLORS_IN_MEMORY) {
-            precalculatedImage[i][j]
-        } else {
-            picture!!.getRGB(j, i)
-        }
-    }
-
-    private fun initPicture(picture: Picture) {
-        this.picture = picture
-        computeEnergy()
-    }
-/*
     private fun checkPixel(x: Int, y: Int) {
-        require(!(x < 0 || x > getColumns() - 1 || y < 0 || y > getRows() - 1))
-    }*/
+        require(!(x < 0 || x > width - 1 || y < 0 || y > height - 1))
+    }
 
-    /*private fun checkSeam(seam: IntArray?, orientation: Int) {
+    // Previously was used to check seam, passed into remove seam functions, but disabled it to gain a little bit of
+    // performance. Maybe will need it later.
+    private fun checkSeam(seam: IntArray?, orientation: Int) {
         requireNotNull(seam)
         val size: Int
         val maxSeamIndex: Int
-        if (orientation == VERTICAl) {
-            size = getRows()
-            maxSeamIndex = getColumns() - 1
+        if (orientation == VERTICAL) {
+            size = height
+            maxSeamIndex = width - 1
         } else {
-            size = getColumns()
-            maxSeamIndex = getRows() - 1
+            size = width
+            maxSeamIndex = height - 1
         }
         require(maxSeamIndex > 0)
         require(seam.size == size)
@@ -249,29 +184,49 @@ class SeamCarver(picture: Picture) {
                 prevP = p
                 continue
             }
-            require(Math.abs(prevP - p) <= 1)
+            require(abs(prevP - p) <= 1)
             prevP = p
         }
     }
-*/
-    private fun computeEnergy() {
-        energy = Array(m) { DoubleArray(n) }
-        for (i in 0 until m) {
-            for (j in 0 until n) {
-                energy[i][j] = pixelEnergy(i, j)
+
+    private fun computeInitialEnergy() {
+        energy = Array(width) { DoubleArray(height) }
+
+        /**
+         * The next lines are for performance, and they lack beauty. We're caching 3 lines and rolling cache as the energy
+         * calculation goes. We need 3 lines as the energy is calculated for each pixel based on the pixels around it (on
+         * the top, left, right and bottom). So for each pixel in the row we also have to have neighbour rows. The energy
+         * calculation goes from left to right, from top to bottom, as this is the most performant way to traverse 2D
+         * array. We retrieve from picture whole rows of pixels instead of getting one by one, as this also allows us to
+         * improve performance, retrieving pixels in batches and storing them in-memory. We can't store whole bitmap
+         * in-memory, as it can be too large, and will cause OOM.
+         * */
+        val initialLines: IntArray = picture.getHorizontalRgbLine(0, 0, linesCount = 3)
+        val cachedSlice = CachedSlice(initialLines, startRow = 0, rowWidth = width)
+
+        for (y in 0 until height) {
+            // start rolling cache if we're going to traverse trough the last row of initially cached lines
+            if (y >= 2 && y < height - 1) {
+                // get next line to cache
+                val newline = picture.getHorizontalRgbLine(0, y + 1)
+                // roll cache to the new line, deleting the first one in the cache
+                cachedSlice.moveSpotlight(newline)
+            }
+            for (x in 0 until width) {
+                energy[x][y] = pixelEnergy(x, y, cachedSlice)
             }
         }
     }
 
-    private fun pixelEnergy(i: Int, j: Int): Double {
-        if (i == 0 || j == 0 || i == m - 1 || j == n - 1) return 1000.0
-        val colorRight: Int = getRGB(i, j + 1)
-        val colorLeft: Int = getRGB(i, j - 1)
-        val colorBottom: Int = getRGB(i + 1, j)
-        val colorTop: Int = getRGB(i - 1, j)
+    private fun pixelEnergy(x: Int, y: Int, pixelProvider: PixelProvider): Double {
+        if (x == 0 || y == 0 || x == width - 1 || y == height - 1) return 1000.0
+        val colorRight = pixelProvider.get(x + 1, y)
+        val colorLeft = pixelProvider.get(x - 1, y)
+        val colorBottom = pixelProvider.get(x, y + 1)
+        val colorTop = pixelProvider.get(x, y - 1)
         val deltaX = calculateDelta(colorRight, colorLeft)
         val deltaY = calculateDelta(colorBottom, colorTop)
-        return Math.sqrt(deltaX + deltaY)
+        return sqrt(deltaX + deltaY)
     }
 
     private fun calculateDelta(firstColor: Int, secondColor: Int): Double {
@@ -281,10 +236,9 @@ class SeamCarver(picture: Picture) {
         val rSecond = getRed(secondColor)
         val gSecond = getGreen(secondColor)
         val bSecond = getBlue(secondColor)
-        return Math.pow((rFirst - rSecond).toDouble(), 2.0) + Math.pow(
-            (gFirst - gSecond).toDouble(),
-            2.0
-        ) + Math.pow((bFirst - bSecond).toDouble(), 2.0)
+        return (rFirst - rSecond).toDouble().pow(2.0) +
+                (gFirst - gSecond).toDouble().pow(2.0) +
+                (bFirst - bSecond).toDouble().pow(2.0)
     }
 
     private fun getRed(color: Int): Int {
@@ -300,7 +254,7 @@ class SeamCarver(picture: Picture) {
     }
 
     companion object {
-        private const val VERTICAl = 0
+        private const val VERTICAL = 0
         private const val HORIZONTAL = 1
     }
 }

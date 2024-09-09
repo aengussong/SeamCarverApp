@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -17,12 +18,15 @@ import androidx.compose.ui.layout.ContentScale
 import com.aengussong.seamcarver.algorithm.SeamCarver
 import com.aengussong.seamcarver.model.Picture
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 @Composable
 fun SeamCarverScreen(initialPicture: Picture, onSaveFile: (Picture) -> Unit) {
-    val backgroundScope = rememberCoroutineScope {Dispatchers.Default}
+    val backgroundScope = rememberCoroutineScope { Dispatchers.Default }
     var seamCarver: SeamCarver? by remember {
         mutableStateOf(null)
     }
@@ -35,36 +39,57 @@ fun SeamCarverScreen(initialPicture: Picture, onSaveFile: (Picture) -> Unit) {
 
     LaunchedEffect(key1 = Unit, block = {
         backgroundScope.launch {
-            println("initializing seam carver shit")
             seamCarver = SeamCarver(initialPicture)
-            println("done calculating energy shit")
         }
     })
 }
 
 @Composable
 fun ShowImage(seamCarver: SeamCarver) {
-    var picture by remember {
-        mutableStateOf(seamCarver.picture())
+    val scope = rememberCoroutineScope { Dispatchers.Default }
+
+    val pictureProcessor by remember {
+        mutableStateOf(PictureProcessor(seamCarver.getPicture()))
     }
+
+    val picture by pictureProcessor.pictureState.collectAsState()
+
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
-            bitmap = picture.getImage().asImageBitmap(),
+            bitmap = picture.image.asImageBitmap(),
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Fit,
-            contentDescription = "test",
+            contentDescription = "Image to scale",
         )
     }
 
+    // todo: test setup, remove after adding user controls
     LaunchedEffect(key1 = Unit, block = {
-        delay(200)
-        println("starting shit")
-        for (i in 0..1000) {
+        scope.launch {
+            delay(200)
+            for (i in 0..900) {
+                removeSeam(seamCarver, pictureProcessor)
+            }
+        }
+    })
+}
+
+suspend fun removeSeam(seamCarver: SeamCarver, pictureProcessor: PictureProcessor) {
+    coroutineScope {
+        async(Dispatchers.IO) {
             val seam = seamCarver.findHorizontalSeam()
             seamCarver.removeHorizontalSeam(seam)
-            println("remove $i shit")
+            pictureProcessor.sendPicture(seamCarver.getPicture())
         }
-        seamCarver.generateNewPicture()
-        println("finished removing shit")
-    })
+    }
+}
+
+class PictureProcessor(initialPicture: Picture) {
+
+    // StateFlow here is used mainly for it's BufferOverflow.DROP_OLDEST behaviour
+    val pictureState = MutableStateFlow(initialPicture)
+
+    fun sendPicture(picture: Picture) {
+        pictureState.value = picture
+    }
 }
