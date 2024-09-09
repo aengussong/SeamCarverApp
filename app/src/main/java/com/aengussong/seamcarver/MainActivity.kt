@@ -1,6 +1,7 @@
 package com.aengussong.seamcarver
 
 import android.content.ContentValues
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
@@ -21,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.aengussong.seamcarver.model.Picture
 import com.aengussong.seamcarver.ui.screen.MainScreen
 import com.aengussong.seamcarver.ui.screen.SeamCarverScreen
@@ -30,6 +32,8 @@ import com.aengussong.seamcarver.utils.adjustSize
 import com.aengussong.seamcarver.utils.getFileFromUri
 import kotlinx.coroutines.CompletableDeferred
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 import java.io.OutputStream
 
 
@@ -74,9 +78,9 @@ class MainActivity : ComponentActivity() {
                         val initPic = Picture(selectedFile!!).adjustAngle().adjustSize()
                         SeamCarverScreen(initPic, onSaveFile = { picture ->
                             pictureToSave = picture.image
-                            checkAndRequestPermissions(pictureToSave!!)
-                        }, onShareFile = { pictureToShare ->
-
+                            checkAndRequestWritePermissions(pictureToSave!!)
+                        }, onShareFile = { picture ->
+                            shareImage(picture.image, "SeamCarving_${System.currentTimeMillis()}.jpg")
                         }, onBackPressed = {
                             selectedFile = null
                         })
@@ -119,7 +123,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun checkAndRequestPermissions(bitmap: Bitmap) {
+    private fun checkAndRequestWritePermissions(bitmap: Bitmap) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             // No need to request WRITE_EXTERNAL_STORAGE for Android 10+
             saveImageToGallery(bitmap)
@@ -133,11 +137,38 @@ class MainActivity : ComponentActivity() {
                     // Permission already granted. Save the image.
                     saveImageToGallery(bitmap)
                 }
+
                 else -> {
                     // Request the permission
                     requestPermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 }
             }
+        }
+    }
+
+    private fun shareImage(bitmap: Bitmap, fileName: String) {
+        try {
+            // Save bitmap to a file in internal cache directory
+            val file = File(cacheDir, fileName)
+            val fileOutputStream = FileOutputStream(file)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, fileOutputStream)
+            fileOutputStream.close()
+
+            // Get the URI using FileProvider
+            val uri: Uri = FileProvider.getUriForFile(this, "com.aengussong.seamcarver.fileprovider", file)
+
+            // Create a share intent
+            val shareIntent: Intent = Intent().apply {
+                action = Intent.ACTION_SEND
+                putExtra(Intent.EXTRA_STREAM, uri)
+                type = "image/jpeg"
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            // Launch the share intent
+            startActivity(Intent.createChooser(shareIntent, "Share Image"))
+        } catch (e: IOException) {
+            e.printStackTrace()
         }
     }
 
