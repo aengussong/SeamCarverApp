@@ -110,15 +110,15 @@ class MainActivity : ComponentActivity() {
             try {
                 outputStream = contentResolver.openOutputStream(it)!!
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream)
-                Toast.makeText(this, "Image saved to Gallery", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.image_saved_to_gallery), Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 e.printStackTrace()
-                Toast.makeText(this, "Error saving image", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.error_saving_image), Toast.LENGTH_SHORT).show()
             } finally {
                 outputStream?.close()
             }
         } ?: run {
-            Toast.makeText(this, "Error creating media store entry", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.error_creating_media_store_entry), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -165,7 +165,7 @@ class MainActivity : ComponentActivity() {
             }
 
             // Launch the share intent
-            startActivity(Intent.createChooser(shareIntent, "Share Image"))
+            startActivity(Intent.createChooser(shareIntent, getString(R.string.share_image)))
         } catch (e: IOException) {
             e.printStackTrace()
         }

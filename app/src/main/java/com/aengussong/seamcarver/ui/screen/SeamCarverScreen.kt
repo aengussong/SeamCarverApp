@@ -38,9 +38,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.aengussong.seamcarver.R
 import com.aengussong.seamcarver.algorithm.SeamCarver
 import com.aengussong.seamcarver.model.Picture
 import kotlinx.coroutines.Dispatchers
@@ -101,10 +103,10 @@ fun ShowImage(seamCarver: SeamCarver, onSaveFile: (Picture) -> Unit, onShareFile
         ) {
             Row {
                 Spacer(modifier = Modifier.weight(1f))
-                RoundButton(Icons.Default.Share, "Share image") {
+                RoundButton(Icons.Default.Share, stringResource(R.string.share_image)) {
                     onShareFile(seamCarver.getPicture())
                 }
-                RoundButton(Icons.Default.Done, "Save image") {
+                RoundButton(Icons.Default.Done, stringResource(R.string.save_image)) {
                     onSaveFile(seamCarver.getPicture())
                 }
             }
@@ -116,7 +118,7 @@ fun ShowImage(seamCarver: SeamCarver, onSaveFile: (Picture) -> Unit, onShareFile
                 .fillMaxSize()
                 .zIndex(1f),
             contentScale = ContentScale.Fit,
-            contentDescription = "Image to scale",
+            contentDescription = stringResource(R.string.image_to_scale),
         )
 
         Column(

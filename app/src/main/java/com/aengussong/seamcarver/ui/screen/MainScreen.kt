@@ -11,7 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.aengussong.seamcarver.R
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -29,7 +31,7 @@ fun MainScreen(fileSelector: suspend () -> File?, onFileSelected: (File) -> Unit
                 }
             }
         }) {
-            Text("Select image")
+            Text(stringResource(R.string.select_image))
         }
     }
 }
