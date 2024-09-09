@@ -43,9 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.aengussong.seamcarver.algorithm.SeamCarver
 import com.aengussong.seamcarver.model.Picture
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -136,10 +134,15 @@ fun ShowImage(seamCarver: SeamCarver, onSaveFile: (Picture) -> Unit, onShareFile
                 color = MaterialTheme.colorScheme.onBackground,
                 text = "${picture.width}x${picture.height}"
             )
+
+            val horizontalSqueezeInteractionSource = remember { MutableInteractionSource() }
+            val verticalSqueezeInteractionSource = remember { MutableInteractionSource() }
+
             Row {
                 InteractionButton(
                     "Squeeze horizontal",
-                    scope,
+                    horizontalSqueezeInteractionSource,
+                    verticalSqueezeInteractionSource,
                     seamCarver,
                     pictureProcessor,
                     HORIZONTAL,
@@ -148,7 +151,8 @@ fun ShowImage(seamCarver: SeamCarver, onSaveFile: (Picture) -> Unit, onShareFile
 
                 InteractionButton(
                     "Squeeze vertical",
-                    scope,
+                    verticalSqueezeInteractionSource,
+                    horizontalSqueezeInteractionSource,
                     seamCarver,
                     pictureProcessor,
                     VERTICAL,
@@ -162,16 +166,21 @@ fun ShowImage(seamCarver: SeamCarver, onSaveFile: (Picture) -> Unit, onShareFile
 @Composable
 fun InteractionButton(
     text: String,
-    scope: CoroutineScope,
+    mainInteractionSource: MutableInteractionSource,
+    otherButtonInteractionSource: MutableInteractionSource,
     seamCarver: SeamCarver,
     pictureProcessor: PictureProcessor,
     orientation: RemovedSeamOrientation,
     modifier: Modifier = Modifier
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val buttonPressed by interactionSource.collectIsPressedAsState()
+    val buttonPressed by mainInteractionSource.collectIsPressedAsState()
+    val otherButtonPressed by otherButtonInteractionSource.collectIsPressedAsState()
 
-    Button(modifier = modifier.padding(10.dp), interactionSource = interactionSource, onClick = {}) {
+    Button(
+        modifier = modifier.padding(10.dp),
+        interactionSource = mainInteractionSource,
+        enabled = !otherButtonPressed,
+        onClick = {}) {
         Text(text)
     }
 
