@@ -9,9 +9,15 @@ import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.sqrt
 
+/**
+ * Used to discourage insertion in the same place several times in a row. Penalizing inserted seam and it's neighbours will push an
+ * algorithm to other seam with less energy.
+ * */
+private const val INSERTED_SEAM_ENERGY_PENALTY = 200
+
 class SeamCarver(picture: Picture) {
     private var energy: Array<DoubleArray> = arrayOf()
-    private lateinit var picture: Picture
+    private var picture: Picture
     private val width: Int
         get() = picture.width
     private val height: Int
@@ -21,7 +27,8 @@ class SeamCarver(picture: Picture) {
 
     init {
         System.loadLibrary("seam_finder")
-        initPicture(picture)
+        this.picture = picture
+        computeInitialEnergy()
     }
 
     fun getPicture(): Picture {
@@ -81,6 +88,8 @@ class SeamCarver(picture: Picture) {
                 if (y == seam[x]) continue
                 if (y > seam[x]) {
                     newPixels[y - 1] = pixels[y]
+                    // adjust energy via shifting everything after removed seam to the top. Thus the border will be duplicated with max values.
+                    energy[x][y - 1] = energy[x][y]
                 } else {
                     newPixels[y] = pixels[y]
                 }
@@ -89,7 +98,7 @@ class SeamCarver(picture: Picture) {
         }
 
         picture = newPicture
-        recalculateEnergy(seam, HORIZONTAL)
+        recalculateEnergyAfterRemoval(seam, HORIZONTAL)
     }
 
     fun removeVerticalSeam(seam: IntArray) {
@@ -102,6 +111,8 @@ class SeamCarver(picture: Picture) {
                 if (x == seam[y]) continue
                 if (x > seam[y]) {
                     newPixels[x - 1] = pixels[x]
+                    // adjust energy via shifting everything after removed seam left. Thus the border will be duplicated with max values.
+                    energy[x - 1][y] = energy[x][y]
                 } else {
                     newPixels[x] = pixels[x]
                 }
@@ -110,12 +121,82 @@ class SeamCarver(picture: Picture) {
         }
 
         picture = newPicture
-        recalculateEnergy(seam, VERTICAL)
+        recalculateEnergyAfterRemoval(seam, VERTICAL)
     }
 
-    private fun initPicture(picture: Picture) {
-        this.picture = picture
-        computeInitialEnergy()
+    /**
+     * The original idea was to duplicate the seam and insert the max energy into it.
+     * But the problem is if we switch from insertion to deletion and back - we won't ever remove the inserted seam, while it is a
+     * prime candidate for removal. So should we store the inserted seams in the separate storage and recalculate the energy for
+     * them after insertion-deletion switch?
+     * Interpolation new pixel color instead of duplicating it doesn't work either due to the same problems if we didn't insert
+     * max energy for the duplicated seam - the inserted seam position is a prime candidate to be inserted again - thus we'll be
+     * inserting new seams in the same place - and this majorly sucks.
+     *
+     * Better idea would be to introduce a small penalty to the inserted seam, discouraging from selected it an insertion position
+     * candidate. This penalty should be small enough to be dissolved over time.
+     * If this sucks - should try to precompute seams to be inserted - insert them (with updating the energy) - then compute next batch.
+     * */
+    fun insertVerticalSeam(seam: IntArray) {
+        val newPicture = Picture(width + 1, height)
+        // check if we can fit more data in energy matrix. Adjust it's size otherwise (without the need to adjust it too often)
+        if (width + 1 > energy.size) {
+            val adjustedSizeEnergy = Array(energy.size + energy.size / 2) { DoubleArray(energy.first().size) }
+            energy.copyInto(adjustedSizeEnergy)
+            energy = adjustedSizeEnergy
+        }
+        for (y in 0 until height) {
+            val pixels = picture.getHorizontalRgbLine(0, y)
+            val newPixels = IntArray(width + 1)
+            for (x in 0 until width) {
+                if (x == seam[y]) {
+                    newPixels[x] = pixels[x]
+                    newPixels[x + 1] = interpolatePixelColor(x, y, VERTICAL)
+                    // no need to insert energy right here, it will be calculated after we shift image itself
+                } else if (x > seam[y]) {
+                    newPixels[x + 1] = pixels[x]
+                    // adjust energy via shifting everything after inserted seam right.
+                    energy[x + 1][y] = energy[x][y]
+                } else {
+                    newPixels[x] = pixels[x]
+                }
+            }
+            newPicture.setHorizontalRgbLine(newPixels, 0, y)
+        }
+
+        picture = newPicture
+        recalculateEnergyAfterInsertion(seam, VERTICAL)
+    }
+
+    fun insertHorizontalSeam(seam: IntArray) {
+        val newPicture = Picture(width, height + 1)
+        // check if we can fit more data in energy matrix. Adjust it's size otherwise (without the need to adjust it too often)
+        if (height + 1 > energy.first().size) {
+            val adjustedSizeEnergy = Array(energy.size) { DoubleArray(energy.first().size + energy.first().size / 2) }
+            energy.forEachIndexed { index, arr -> arr.copyInto(adjustedSizeEnergy[index]) }
+            energy = adjustedSizeEnergy
+        }
+        for (x in 0 until width) {
+            val pixels = picture.getVerticalRgbLine(x, 0)
+            val newPixels = IntArray(height + 1)
+            for (y in 0 until height) {
+                if (y == seam[x]) {
+                    newPixels[y] = pixels[y]
+                    newPixels[y + 1] = interpolatePixelColor(x, y, HORIZONTAL)
+                    // no need to insert energy right here, it will be calculated after we shift image itself
+                } else if (y > seam[x]) {
+                    newPixels[y + 1] = pixels[y]
+                    // adjust energy via shifting everything after inserted seam right.
+                    energy[x][y + 1] = energy[x][y]
+                } else {
+                    newPixels[y] = pixels[y]
+                }
+            }
+            newPicture.setVerticalRgbLine(newPixels, x, 0)
+        }
+
+        picture = newPicture
+        recalculateEnergyAfterInsertion(seam, HORIZONTAL)
     }
 
     private fun relax(
@@ -146,7 +227,7 @@ class SeamCarver(picture: Picture) {
      * [orientation]. x-s for Horizontal and y-s for Vertical.
      * @param orientation - orientation of the seam that was just removed
      * */
-    private fun recalculateEnergy(removedSeam: IntArray, orientation: Int) {
+    private fun recalculateEnergyAfterRemoval(removedSeam: IntArray, orientation: Int) {
         val pixelProvider = DefaultPixelProvider(picture)
         var traversedSide = 0
         for (i in removedSeam) {
@@ -158,6 +239,60 @@ class SeamCarver(picture: Picture) {
             energy[nx][ny] = pixelEnergy(nx, ny, pixelProvider)
             traversedSide++
         }
+    }
+
+    /**
+     * Adjust energy matrix after seam insertion.
+     *
+     * Calculate energy for the inserted seam and it's neighbours (top and bottom or left and right, depending on orientation). Introduce
+     * penalty for the inserted seam energy and it's neighbors, slightly increasing the value, which should discourage the algorithm from
+     * selecting this area as an insertion point in the next pass. The penalty is presumably small enough to be dissipated naturally.
+     * */
+    private fun recalculateEnergyAfterInsertion(insertedSeam: IntArray, orientation: Int) {
+        val pixelProvider = DefaultPixelProvider(picture)
+        var traversedSide = 0
+        for (i in insertedSeam) {
+            // coordinates of the inserted seam
+            val (x, y) = if (orientation == HORIZONTAL) traversedSide to i + 1 else i + 1 to traversedSide
+            // previous neighbor to the inserted seam
+            val (px, py) = if (orientation == HORIZONTAL) x to (y - 1).coerceAtLeast(0) else (x - 1).coerceAtLeast(0) to y
+            // next neighbor to the inserted seam
+            val (nx, ny) = if (orientation == HORIZONTAL) x to (y + 1).coerceAtMost(height - 1) else (x + 1).coerceAtMost(width - 1) to y
+            energy[x][y] = pixelEnergy(x, y, pixelProvider) + INSERTED_SEAM_ENERGY_PENALTY
+            energy[px][py] = pixelEnergy(px, py, pixelProvider) + INSERTED_SEAM_ENERGY_PENALTY
+            energy[nx][ny] = pixelEnergy(nx, ny, pixelProvider) + INSERTED_SEAM_ENERGY_PENALTY
+            traversedSide++
+        }
+    }
+
+    private fun interpolatePixelColor(x: Int, y: Int, orientation: Int): Int {
+        fun getSecondPixel(): Int {
+            if (x >= width - 1 && orientation == VERTICAL) return picture.getRGB(x, y)
+            if (y >= height - 1 && orientation == HORIZONTAL) return picture.getRGB(x, y)
+
+            val (neighborCol, neighborRow) = if (orientation == VERTICAL) x + 1 to y else x to y + 1
+            return picture.getRGB(neighborCol, neighborRow)
+        }
+
+        fun getColorDelta(first: Int, second: Int): Int = (first + second) / 2
+
+        val secondPixel = getSecondPixel()
+        val firstPixel = picture.getRGB(x, y)
+
+        val firstPixelRed = getRed(firstPixel)
+        val secondPixelRed = getRed(secondPixel)
+        val deltaPixelRed = getColorDelta(firstPixelRed, secondPixelRed)
+
+        val firstPixelGreen = getGreen(firstPixel)
+        val secondPixelGreen = getGreen(secondPixel)
+        val deltaPixelGreen = getColorDelta(firstPixelGreen, secondPixelGreen)
+
+        val firstPixelBlue = getBlue(firstPixel)
+        val secondPixelBlue = getBlue(secondPixel)
+        val deltaPixelBlue = getColorDelta(firstPixelBlue, secondPixelBlue)
+
+        // set alpha to full opacity (OxFF)
+        return (0xFF shl 24) or (deltaPixelRed shl 16) or (deltaPixelGreen shl 8) or deltaPixelBlue
     }
 
     private fun checkPixel(x: Int, y: Int) {
@@ -222,10 +357,10 @@ class SeamCarver(picture: Picture) {
 
     private fun pixelEnergy(x: Int, y: Int, pixelProvider: PixelProvider): Double {
         if (x == 0 || y == 0 || x == width - 1 || y == height - 1) return 1000.0
-        val colorRight = pixelProvider.get(x + 1, y)
-        val colorLeft = pixelProvider.get(x - 1, y)
-        val colorBottom = pixelProvider.get(x, y + 1)
-        val colorTop = pixelProvider.get(x, y - 1)
+        val colorRight = pixelProvider.getPixel(x + 1, y)
+        val colorLeft = pixelProvider.getPixel(x - 1, y)
+        val colorBottom = pixelProvider.getPixel(x, y + 1)
+        val colorTop = pixelProvider.getPixel(x, y - 1)
         val deltaX = calculateDelta(colorRight, colorLeft)
         val deltaY = calculateDelta(colorBottom, colorTop)
         return sqrt(deltaX + deltaY)

@@ -1,5 +1,5 @@
 package com.aengussong.seamcarver.algorithm.pixelProvider
 
 interface PixelProvider {
-    fun get(x: Int, y: Int): Int
+    fun getPixel(x: Int, y: Int): Int
 }

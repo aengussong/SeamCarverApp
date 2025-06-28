@@ -86,8 +86,6 @@ fun SeamCarverScreen(
 
 @Composable
 fun ShowImage(seamCarver: SeamCarver, onSaveFile: (Picture) -> Unit, onShareFile: (Picture) -> Unit) {
-    val scope = rememberCoroutineScope { Dispatchers.Default }
-
     val pictureProcessor by remember {
         mutableStateOf(PictureProcessor(seamCarver.getPicture()))
     }
@@ -110,6 +108,7 @@ fun ShowImage(seamCarver: SeamCarver, onSaveFile: (Picture) -> Unit, onShareFile
                     onSaveFile(seamCarver.getPicture())
                 }
             }
+
         }
 
         Image(
@@ -139,25 +138,52 @@ fun ShowImage(seamCarver: SeamCarver, onSaveFile: (Picture) -> Unit, onShareFile
 
             val horizontalSqueezeInteractionSource = remember { MutableInteractionSource() }
             val verticalSqueezeInteractionSource = remember { MutableInteractionSource() }
+            val horizontalEnlargeInteractionSource = remember { MutableInteractionSource() }
+            val verticalEnlargeInteractionSource = remember { MutableInteractionSource() }
 
             Row {
                 InteractionButton(
-                    "Squeeze horizontal",
+                    "Squeeze horizontally",
                     horizontalSqueezeInteractionSource,
                     verticalSqueezeInteractionSource,
                     seamCarver,
                     pictureProcessor,
                     HORIZONTAL,
+                    Action.SQUEEZE,
                     modifier = Modifier.weight(1f),
                 )
 
                 InteractionButton(
-                    "Squeeze vertical",
+                    "Squeeze vertically",
                     verticalSqueezeInteractionSource,
                     horizontalSqueezeInteractionSource,
                     seamCarver,
                     pictureProcessor,
                     VERTICAL,
+                    Action.SQUEEZE,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row {
+                InteractionButton(
+                    "Enlarge horizontally",
+                    horizontalEnlargeInteractionSource,
+                    verticalEnlargeInteractionSource,
+                    seamCarver,
+                    pictureProcessor,
+                    HORIZONTAL,
+                    Action.ENLARGE,
+                    modifier = Modifier.weight(1f),
+                )
+
+                InteractionButton(
+                    "Enlarge vertically",
+                    verticalEnlargeInteractionSource,
+                    horizontalEnlargeInteractionSource,
+                    seamCarver,
+                    pictureProcessor,
+                    VERTICAL,
+                    Action.ENLARGE,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -173,6 +199,7 @@ fun InteractionButton(
     seamCarver: SeamCarver,
     pictureProcessor: PictureProcessor,
     orientation: RemovedSeamOrientation,
+    action: Action,
     modifier: Modifier = Modifier
 ) {
     val buttonPressed by mainInteractionSource.collectIsPressedAsState()
@@ -189,7 +216,7 @@ fun InteractionButton(
     LaunchedEffect(buttonPressed) {
         withContext(Dispatchers.IO) {
             while (buttonPressed) {
-                removeSeam(seamCarver, pictureProcessor, orientation)
+                updateImage(seamCarver, pictureProcessor, orientation, action)
             }
         }
     }
@@ -212,21 +239,24 @@ fun RoundButton(icon: ImageVector, contentDescription: String, onClick: () -> Un
     }
 }
 
-fun removeSeam(
+fun updateImage(
     seamCarver: SeamCarver,
     pictureProcessor: PictureProcessor,
-    orientation: RemovedSeamOrientation
+    orientation: RemovedSeamOrientation,
+    action: Action
 ) {
-    if (orientation == HORIZONTAL) {
+    fun updateHorizontally() {
         val seam = seamCarver.findHorizontalSeam()
-        seamCarver.removeHorizontalSeam(seam)
-    } else {
-        val seam = seamCarver.findVerticalSeam()
-        seamCarver.removeVerticalSeam(seam)
+        if (action == Action.SQUEEZE) seamCarver.removeHorizontalSeam(seam) else seamCarver.insertHorizontalSeam(seam)
     }
 
-    pictureProcessor.sendPicture(seamCarver.getPicture())
+    fun updateVertically() {
+        val seam = seamCarver.findVerticalSeam()
+        if (action == Action.SQUEEZE) seamCarver.removeVerticalSeam(seam) else seamCarver.insertVerticalSeam(seam)
+    }
 
+    if (orientation == HORIZONTAL) updateHorizontally() else updateVertically()
+    pictureProcessor.sendPicture(seamCarver.getPicture())
 }
 
 class PictureProcessor(initialPicture: Picture) {
@@ -242,3 +272,8 @@ class PictureProcessor(initialPicture: Picture) {
 sealed interface RemovedSeamOrientation
 object VERTICAL : RemovedSeamOrientation
 object HORIZONTAL : RemovedSeamOrientation
+
+enum class Action {
+    SQUEEZE,
+    ENLARGE
+}

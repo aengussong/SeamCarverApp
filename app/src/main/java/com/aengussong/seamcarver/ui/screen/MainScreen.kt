@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.aengussong.seamcarver.R
 import kotlinx.coroutines.launch
 import java.io.File
@@ -21,17 +22,18 @@ import java.io.File
 fun MainScreen(fileSelector: suspend () -> File?, onFileSelected: (File) -> Unit) {
     val coroutineScope = rememberCoroutineScope()
     Box(modifier = Modifier.fillMaxSize()) {
-        Button(modifier = Modifier
-            .align(Alignment.Center)
-            .size(250.dp)
-            .padding(10.dp), shape = CircleShape, onClick = {
-            coroutineScope.launch {
-                fileSelector()?.let { file ->
-                    onFileSelected(file)
+        Button(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(250.dp)
+                .padding(10.dp), shape = CircleShape, onClick = {
+                coroutineScope.launch {
+                    fileSelector()?.let { file ->
+                        onFileSelected(file)
+                    }
                 }
-            }
-        }) {
-            Text(stringResource(R.string.select_image))
+            }) {
+            Text(stringResource(R.string.select_image), fontSize = 22.sp)
         }
     }
 }
