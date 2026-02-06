@@ -22,6 +22,7 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags += ""
+                arguments += listOf("-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON") // add 16KB page size support. Other solution would be to switch to Android NDK r28
             }
         }
     }
