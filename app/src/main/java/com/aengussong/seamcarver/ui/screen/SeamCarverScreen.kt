@@ -52,6 +52,8 @@ import com.aengussong.seamcarver.model.Picture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -146,27 +148,30 @@ fun ShowImage(seamCarver: SeamCarver, onSaveFile: (Picture) -> Unit, onShareFile
             val verticalSqueezeInteractionSource = remember { MutableInteractionSource() }
             val horizontalEnlargeInteractionSource = remember { MutableInteractionSource() }
             val verticalEnlargeInteractionSource = remember { MutableInteractionSource() }
+            val updateMutex = remember { Mutex() }
 
             Row {
                 InteractionButton(
                     "Squeeze horizontally",
                     horizontalSqueezeInteractionSource,
-                    verticalSqueezeInteractionSource,
+                    listOf(verticalSqueezeInteractionSource, horizontalEnlargeInteractionSource, verticalEnlargeInteractionSource),
                     seamCarver,
                     pictureProcessor,
                     HORIZONTAL,
                     Action.SQUEEZE,
+                    updateMutex,
                     modifier = Modifier.weight(1f),
                 )
 
                 InteractionButton(
                     "Squeeze vertically",
                     verticalSqueezeInteractionSource,
-                    horizontalSqueezeInteractionSource,
+                    listOf(horizontalSqueezeInteractionSource, horizontalEnlargeInteractionSource, verticalEnlargeInteractionSource),
                     seamCarver,
                     pictureProcessor,
                     VERTICAL,
                     Action.SQUEEZE,
+                    updateMutex,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -174,22 +179,24 @@ fun ShowImage(seamCarver: SeamCarver, onSaveFile: (Picture) -> Unit, onShareFile
                 InteractionButton(
                     "Enlarge horizontally",
                     horizontalEnlargeInteractionSource,
-                    verticalEnlargeInteractionSource,
+                    listOf(verticalEnlargeInteractionSource, horizontalSqueezeInteractionSource, verticalSqueezeInteractionSource),
                     seamCarver,
                     pictureProcessor,
                     HORIZONTAL,
                     Action.ENLARGE,
+                    updateMutex,
                     modifier = Modifier.weight(1f),
                 )
 
                 InteractionButton(
                     "Enlarge vertically",
                     verticalEnlargeInteractionSource,
-                    horizontalEnlargeInteractionSource,
+                    listOf(horizontalEnlargeInteractionSource, horizontalSqueezeInteractionSource, verticalSqueezeInteractionSource),
                     seamCarver,
                     pictureProcessor,
                     VERTICAL,
                     Action.ENLARGE,
+                    updateMutex,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -201,20 +208,21 @@ fun ShowImage(seamCarver: SeamCarver, onSaveFile: (Picture) -> Unit, onShareFile
 fun InteractionButton(
     text: String,
     mainInteractionSource: MutableInteractionSource,
-    otherButtonInteractionSource: MutableInteractionSource,
+    otherInteractionSources: List<MutableInteractionSource>,
     seamCarver: SeamCarver,
     pictureProcessor: PictureProcessor,
     orientation: RemovedSeamOrientation,
     action: Action,
+    updateMutex: Mutex,
     modifier: Modifier = Modifier
 ) {
     val buttonPressed by mainInteractionSource.collectIsPressedAsState()
-    val otherButtonPressed by otherButtonInteractionSource.collectIsPressedAsState()
+    val anyOtherButtonPressed = otherInteractionSources.any { it.collectIsPressedAsState().value }
 
     Button(
         modifier = modifier.padding(10.dp),
         interactionSource = mainInteractionSource,
-        enabled = !otherButtonPressed,
+        enabled = !anyOtherButtonPressed,
         onClick = {}) {
         Text(text)
     }
@@ -222,7 +230,9 @@ fun InteractionButton(
     LaunchedEffect(buttonPressed) {
         withContext(Dispatchers.IO) {
             while (buttonPressed) {
-                updateImage(seamCarver, pictureProcessor, orientation, action)
+                updateMutex.withLock {
+                    updateImage(seamCarver, pictureProcessor, orientation, action)
+                }
             }
         }
     }
