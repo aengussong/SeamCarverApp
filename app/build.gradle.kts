@@ -11,7 +11,7 @@ android {
     defaultConfig {
         applicationId = "com.aengussong.seamcarver"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 4
         versionName = "1.1.2"
 
